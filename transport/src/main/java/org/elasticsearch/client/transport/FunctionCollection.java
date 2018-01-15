@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutionException;
 
 import org.HdrHistogram.Histogram;
 import org.apache.lucene.index.Terms;
+import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.bulk.BackoffPolicy;
 import org.elasticsearch.action.bulk.BulkProcessor;
@@ -51,7 +52,7 @@ import static org.elasticsearch.index.query.QueryBuilders.*;
  * Hello world!
  *
  */
-public class App 
+public class FunctionCollection 
 {
 	
 	public static IndexResponse createIndexResponse(TransportClient client) throws IOException {
@@ -223,7 +224,7 @@ public class App
 	 * @param client
 	 * @throws IOException
 	 */
-	public static void createSearchResponse(TransportClient client) throws IOException {
+	public static void createSearchResponse(TransportClient client) {
 		
 		QueryBuilder query = QueryBuilders.termQuery("kubernetes.host", "lab4");
 //		QueryBuilder query = multiMatchQuery("lab4", "kubernetes.host"); // one test => multi field!
@@ -287,6 +288,94 @@ public class App
 		
 	}
 	
+	/**
+	 * term query
+	 * @param client
+	 */
+	public static void createTermsSearchResponse(TransportClient client)  {
+		
+		QueryBuilder query = termsQuery("log",    
+		    "error", "Exception", "Warning");   
+		
+		SearchResponse response = client.prepareSearch("logstash-*")
+		        .setTypes("fluentd")
+		        .addSort("@timestamp", SortOrder.DESC)
+		        .setScroll(new TimeValue(60000))
+		        .setQuery(query)                 // Query
+		        .setPostFilter(QueryBuilders.rangeQuery("@timestamp").from("0").to("1515840091000"))     // Filter: accord to the time sort
+		        .setSize(100).setExplain(true)
+		        .get();
+		do {
+			for(SearchHit hit : response.getHits().getHits()) {
+				System.out.println(hit.getSourceAsString());
+			}
+			
+			response = client.prepareSearchScroll(response.getScrollId())
+						.setScroll(new TimeValue(60000)).execute().actionGet();
+		}while(response.getHits().getHits().length != 0);
+	}
+	
+	/**
+	 * A query which wraps another query, but executes it in filter context. 
+	 * All matching documents are given the same “constant” _score.
+	 * @param client
+	 */
+	public static void createConstantQuery(TransportClient client) {
+		QueryBuilder query = constantScoreQuery(
+		        termQuery("kubernetes.host","lab3")      
+		    )
+		    .boost(2.0f);  
+
+		SearchResponse response = client.prepareSearch("logstash-*")
+			        .setTypes("fluentd")
+			        .addSort("@timestamp", SortOrder.DESC)
+			        .setScroll(new TimeValue(60000))
+			        .setQuery(query)                 // Query
+			        .setPostFilter(QueryBuilders.rangeQuery("@timestamp").from("0").to("1515840091000"))     // Filter: accord to the time sort
+			        .setSize(100).setExplain(true)
+			        .get();
+			do {
+				for(SearchHit hit : response.getHits().getHits()) {
+					System.out.println(hit.getSourceAsString());
+				}
+				
+				response = client.prepareSearchScroll(response.getScrollId())
+							.setScroll(new TimeValue(60000)).execute().actionGet();
+			}while(response.getHits().getHits().length != 0);
+	}
+	
+	/**
+	 * The default query for combining multiple leaf or compound query clauses, as must, should, must_not, or filter clauses. 
+	 * The must and should clauses have their scores combined — the more matching clauses, the better 
+	 * — while the must_not and filter clauses are executed in filter context.
+	 * @param client
+	 */
+	public static void createBoolQuery(TransportClient client) {
+		QueryBuilder qb = boolQuery()
+			    .must(termQuery("kubernetes.host", "lab3"))
+			    .must(matchQuery("kubernetes.pod_name", "iotdb-master-8npsb"))
+			    .filter(QueryBuilders.rangeQuery("@timestamp").from("0").to("1515840091000"));
+		
+		SearchResponse response = client.prepareSearch("logstash-*")
+		        .setTypes("fluentd")
+		        .setScroll(new TimeValue(60000))
+		        .setQuery(qb)                 // Query
+		        .setSize(100).setExplain(true)
+		        .get();
+		System.out.println(response.getHits().getMaxScore());
+		do {
+			for(SearchHit hit : response.getHits().getHits()) {
+				System.out.println(hit.getSourceAsString());
+			}
+			
+			response = client.prepareSearchScroll(response.getScrollId())
+						.setScroll(new TimeValue(60000)).execute().actionGet();
+		}while(response.getHits().getHits().length != 0);
+	}
+	
+	
+	
+	
     public static void main( String[] args )
     {
     	/**
@@ -305,9 +394,11 @@ public class App
 					new InetSocketTransportAddress(InetAddress.getByName("localhost"), 9300));
 			
 			// createIndexResponse(client);
-			createSearchResponse(client);
+//			createSearchResponse(client);
+			//createTermsSearchResponse(client);
 			//createMultiSearch(client);
-			
+			//createConstantQuery(client);
+			createBoolQuery(client);
 		} catch (UnknownHostException e) {
 			e.printStackTrace();
 		} catch (IOException e) {

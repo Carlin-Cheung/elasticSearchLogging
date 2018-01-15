@@ -32,5 +32,6 @@
 			<attribute name="maven.pomderived" value="true"/>
 		</attributes>
 	</classpathentry>
+	<classpathentry kind="lib" path="E:/Linux/kubernates/Kubernetes-monitor/transport-5.6.5-javadoc.jar"/>
 	<classpathentry kind="output" path="target/classes"/>
 </classpath>
