@@ -6,6 +6,7 @@ import static org.elasticsearch.index.query.QueryBuilders.termsQuery;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.common.settings.Settings;
@@ -18,19 +19,24 @@ import org.elasticsearch.search.sort.SortOrder;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.joda.time.DateTime;
 
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+
 public class LoggingSearch {
 	
 	
 	/**
 	 * term query
 	 * @param client
+	 * @throws Exception 
 	 */
-public static void createTermsSearchResponse(TransportClient client)  {
+public static void createTermsSearchResponse(TransportClient client) throws Exception  {
 		
 		QueryBuilder query = termsQuery("log",    
-		    "error", "Exception", "Warning");   
+		    "error", "exception", "warning");   
 		
-		DateTime endDate = new DateTime(System.currentTimeMillis() + 8 * 60 * 60 * 1000);
+//		DateTime endDate = new DateTime(System.currentTimeMillis() + 8 * 60 * 60 * 1000);
+		DateTime endDate = new DateTime(System.currentTimeMillis());
 		DateTime startDate = new DateTime(endDate.getMillis() - 30 * 60 * 1000);
 		
 		System.out.println(System.currentTimeMillis());
@@ -46,9 +52,40 @@ public static void createTermsSearchResponse(TransportClient client)  {
 		        .setSize(100).setExplain(true)
 		        .get();
 		do {
-			for(SearchHit hit : response.getHits().getHits()) {
-				System.out.println(hit.getSourceAsString());
+			if(response.getHits().getHits().length == 0) {
+				System.out.println("empty result");
+				System.exit(0);
 			}
+			
+			ArrayList<LogCollect> users = new ArrayList<>();
+			for(SearchHit hit : response.getHits().getHits()) {
+//				String hitJson = hit.getSourceAsString();
+//				System.out.println(hitJson);
+//				System.out.println(hit.getId() + " " + hit.getIndex() + " " +hit.getScore() );
+				JSONObject jsonSource = JSON.parseObject(hit.getSourceAsString());
+				JSONObject jsonKubernetes = jsonSource.getJSONObject("kubernetes");
+				System.out.println(jsonSource.get("log"));
+				System.out.println(jsonSource.get("@timestamp") 
+						+ " " + jsonKubernetes.get("host") + " " + jsonKubernetes.get("pod_name")
+						+ " " + jsonKubernetes.get("container_name"));
+
+				LogCollect user = new LogCollect();
+				user.setContent(jsonSource.getString("log"));
+				user.setHostip(jsonKubernetes.getString("host"));
+				user.setLogtime(jsonSource.getDate("@timestamp"));
+				user.setSoftware(jsonKubernetes.getString("pod_name"));
+				user.setProcessname(jsonKubernetes.getString("container_name"));
+				user.setUser("admin");
+				user.setFaulttype("error");
+				users.add(user);
+			}
+			
+			/**
+			 * post data to backend
+			 */
+			String postData = JSON.toJSONString(users);
+			System.out.println(postData);
+//			HttpUtils.doPost("", postData);
 			
 			response = client.prepareSearchScroll(response.getScrollId())
 						.setScroll(new TimeValue(60000)).execute().actionGet();
@@ -97,18 +134,21 @@ public static void createTermsSearchResponse(TransportClient client)  {
 		 * PreBuiltTransportClient(settings);
 		 */
 		Settings settings = Settings.builder()
-				.put("cluster.name", "elasticsearch")
+				.put("cluster.name", "kubernetes-logging")
 				.put("client.transport.sniff", true)
 				.build();
 		TransportClient client = new PreBuiltTransportClient(settings);
 
 		try {
 			client.addTransportAddress(
-					new InetSocketTransportAddress(InetAddress.getByName("localhost"), 9300));
+					new InetSocketTransportAddress(InetAddress.getByName("172.19.0.134"), 31001));
 			
 			createTermsSearchResponse(client);
 		} catch (UnknownHostException e) {
 			e.printStackTrace();
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace(); 
 		} finally {
 			client.close();
 		}
