@@ -37,7 +37,7 @@ public static void createTermsSearchResponse(TransportClient client) throws Exce
 		
 //		DateTime endDate = new DateTime(System.currentTimeMillis() + 8 * 60 * 60 * 1000);
 		DateTime endDate = new DateTime(System.currentTimeMillis());
-		DateTime startDate = new DateTime(endDate.getMillis() - 30 * 60 * 1000);
+		DateTime startDate = new DateTime(endDate.getMillis() - 60 *60 * 60 * 1000);
 		
 		System.out.println(System.currentTimeMillis());
 		System.out.println(startDate.getMillis());
@@ -85,7 +85,7 @@ public static void createTermsSearchResponse(TransportClient client) throws Exce
 			 */
 			String postData = JSON.toJSONString(users);
 			System.out.println(postData);
-//			HttpUtils.doPost("", postData);
+			HttpUtils.doPost("http://10.13.28.133:8080/test/asset/module/log/insertErrorLog.action", postData);
 			
 			response = client.prepareSearchScroll(response.getScrollId())
 						.setScroll(new TimeValue(60000)).execute().actionGet();
@@ -134,14 +134,14 @@ public static void createTermsSearchResponse(TransportClient client) throws Exce
 		 * PreBuiltTransportClient(settings);
 		 */
 		Settings settings = Settings.builder()
-				.put("cluster.name", "kubernetes-logging")
+				.put("cluster.name", "elasticsearch")
 				.put("client.transport.sniff", true)
 				.build();
 		TransportClient client = new PreBuiltTransportClient(settings);
 
 		try {
 			client.addTransportAddress(
-					new InetSocketTransportAddress(InetAddress.getByName("172.19.0.134"), 31001));
+					new InetSocketTransportAddress(InetAddress.getByName("localhost"), 9300));
 			
 			createTermsSearchResponse(client);
 		} catch (UnknownHostException e) {

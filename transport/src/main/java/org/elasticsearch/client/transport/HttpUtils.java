@@ -87,8 +87,8 @@ public class HttpUtils {
 	            outputStreamWriter.write(postData);
 	            outputStreamWriter.flush();
 	           
-	            httpURLConnection.getResponseCode();
-	       
+	            System.out.println(httpURLConnection.getResponseCode());
+	            System.out.println("successfull");
 	        } finally {
 	            
 	            if (outputStreamWriter != null) {
